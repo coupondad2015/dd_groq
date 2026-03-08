@@ -3179,7 +3179,8 @@ setMuted(uiMuted);
     try{
       sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
       sfxMasterGain = sfxCtx.createGain();
-      sfxMasterGain.gain.value = Math.max(0, Math.min(1, SFX_MASTER));
+      //sfxMasterGain.gain.value = Math.max(0, Math.min(1, SFX_MASTER));
+      sfxMasterGain.gain.value = Math.max(0, SFX_MASTER);
       sfxMasterGain.connect(sfxCtx.destination);
 
       const entries = Object.entries(SFX_DEFS);
@@ -3243,7 +3244,8 @@ setMuted(uiMuted);
       }
 
       const vol = (def?.vol ?? 0.5);
-      const targetVol = Math.max(0, Math.min(1, vol * SFX_MASTER));
+      //const targetVol = Math.max(0, Math.min(1, vol * SFX_MASTER));
+      const targetVol = Math.max(0, vol * SFX_MASTER);
 
       // Try each URL until one loads/plays.
       (function tryPlay(i){

@@ -3549,6 +3549,11 @@ function weightedChoice(items, weights){
   ];
 
 
+    window.DD_AI.rareNarrativeInflight = false;
+    window.DD_AI.rareNarrativeLastAt = -9999;
+    window.DD_AI.rareNarrativeMessageCount = 0;
+    window.DD_AI.messageSeq = 0;
+
     // Default starting supplies
     for(let i=0;i<DEFAULT_HEAL_POTIONS;i++) game.inv.potions.push(POTION.HEAL);
     if(DEBUG){
@@ -3575,6 +3580,128 @@ logMsg("");
   // Allow Groq Lambda AI to direct aspecs of the game
   window.DD_DIRECTOR = window.DD_DIRECTOR || {};
   window.__ddAiMessageInflight = window.__ddAiMessageInflight || new Set();
+  window.DD_AI = window.DD_AI || {};
+  window.DD_AI.rareNarrativeEnabled = true;
+  window.DD_AI.rareNarrativeChance = 0.015;
+  window.DD_AI.rareNarrativeCooldownMessages = 30;
+  window.DD_AI.rareNarrativeMaxChars = 90;
+  window.DD_AI.rareNarrativeInflight = false;
+  window.DD_AI.rareNarrativeLastAt = -9999;
+  window.DD_AI.rareNarrativeMessageCount = 0;
+  window.DD_AI.rareNarrativeEndpoint = '/api/rare-lore';
+  window.DD_AI.messageSeq = window.DD_AI.messageSeq || 0;
+
+  function ddClampRareNarrativeLine(line){
+    if(typeof line !== 'string') return '';
+    line = line.replace(/\s+/g, ' ').trim();
+    if(!line) return '';
+    if(line.length > window.DD_AI.rareNarrativeMaxChars){
+      line = line.slice(0, window.DD_AI.rareNarrativeMaxChars).trim();
+    }
+    return line;
+  }
+
+  function ddGetRareNarrativeMode(snapshot){
+    if(!snapshot) return 'watchful';
+    if((snapshot.hpPercent || 0) <= 0.25) return 'blood_scent';
+    if((snapshot.torches || 0) <= 1) return 'dark_hunger';
+    if((snapshot.depth || 0) >= 15) return 'deep_stone';
+    if((snapshot.depth || 0) >= 8) return 'ancient';
+    return 'watchful';
+  }
+
+  function ddRareNarrativeMessageAllowed(text, type){
+    if(typeof text !== 'string' || !text.trim()) return false;
+    if(type === 'prompt' || type === 'lore' || type === 'sys') return false;
+    const low = text.toLowerCase();
+    const blocked = [
+      'inventory full',
+      'cannot move',
+      'nothing happens',
+      'reset to try again',
+      'reset to play again'
+    ];
+    for(const token of blocked){
+      if(low.includes(token)) return false;
+    }
+    return true;
+  }
+
+  function ddBuildRareNarrativePayload(entry){
+    const recentMessage = entry && typeof entry.text === 'string' ? entry.text : '';
+    const type = entry && entry.type ? entry.type : 'log';
+    const hp = (game && typeof game.hp === 'number') ? game.hp : 0;
+    const hpMax = (game && typeof game.hpMax === 'number') ? game.hpMax : 0;
+    const payload = {
+      event: 'rare_lore',
+      message: recentMessage,
+      type,
+      depth: (game && typeof game.depth === 'number') ? game.depth : 0,
+      hp,
+      hpMax,
+      hpPercent: hpMax > 0 ? hp / hpMax : 0,
+      atk: (game && typeof game.atk === 'number') ? game.atk : 0,
+      gold: (game && typeof game.gold === 'number') ? game.gold : 0,
+      torches: (game && game.inv && typeof game.inv.torches === 'number') ? game.inv.torches : 0,
+      healingPotions: (game && game.inv && Array.isArray(game.inv.potions)) ? game.inv.potions.filter(p => p === POTION.HEAL).length : 0,
+      weaponName: game && game.weaponName,
+      recentMessage
+    };
+    payload.mode = ddGetRareNarrativeMode(payload);
+    return payload;
+  }
+
+  function ddShouldTriggerRareNarrative(entry){
+    if(!window.DD_AI.rareNarrativeEnabled) return false;
+    if(window.DD_AI.rareNarrativeInflight) return false;
+    if(!entry || !ddRareNarrativeMessageAllowed(entry.text, entry.type)) return false;
+    const count = window.DD_AI.rareNarrativeMessageCount || 0;
+    const lastAt = window.DD_AI.rareNarrativeLastAt || -9999;
+    if((count - lastAt) < window.DD_AI.rareNarrativeCooldownMessages) return false;
+    if(Math.random() > window.DD_AI.rareNarrativeChance) return false;
+    return true;
+  }
+
+  function ddReplaceMessageById(messageId, nextText){
+    if(!game || !Array.isArray(game.msg)) return false;
+    const clean = ddClampRareNarrativeLine(nextText);
+    if(!clean) return false;
+    const idx = game.msg.findIndex(m => m && m.id === messageId);
+    if(idx < 0) return false;
+    const current = game.msg[idx];
+    if(!current || current.type === 'prompt' || current.type === 'lore') return false;
+    if(current.text === clean) return false;
+    game.msg[idx] = Object.assign({}, current, { text: clean, aiNarrative: true });
+    renderMessages();
+    return true;
+  }
+
+  async function ddRequestRareNarrativeVariant(entry){
+    const payload = ddBuildRareNarrativePayload(entry);
+    window.DD_AI.rareNarrativeInflight = true;
+    try{
+      const res = await fetch(window.DD_AI.rareNarrativeEndpoint || '/api/rare-lore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      const revised = ddClampRareNarrativeLine((data && (data.revisedMessage || data.rareLore || data.text || data.message)) || '');
+      if(revised){
+        ddReplaceMessageById(entry.id, revised);
+      }
+    }catch(err){
+      console.error('AI RARE NARRATIVE ERROR:', err);
+    }finally{
+      window.DD_AI.rareNarrativeInflight = false;
+    }
+  }
+
+  function ddMaybeNarrativizeMessage(entry){
+    if(!ddShouldTriggerRareNarrative(entry)) return;
+    window.DD_AI.rareNarrativeLastAt = window.DD_AI.rareNarrativeMessageCount || 0;
+    ddRequestRareNarrativeVariant(entry);
+  }
 
   async function directorTest(depthOverride = null) {
     try{
@@ -4098,10 +4225,13 @@ function renderMessages(){
       game.activePromptKey = null;
     }
 
-    game.msg.unshift({ text, type });
+    const entry = { text, type, id: ++window.DD_AI.messageSeq };
+    game.msg.unshift(entry);
     game.msg = game.msg.slice(0, 7);
     renderMessages();
+    window.DD_AI.rareNarrativeMessageCount = (window.DD_AI.rareNarrativeMessageCount || 0) + 1;
     try{ maybeEnrichMessage(text, type); }catch(_){}
+    try{ ddMaybeNarrativizeMessage(entry); }catch(_){}
   }
 
 // ---------- LORE (run-persistent, non-blocking) ----------

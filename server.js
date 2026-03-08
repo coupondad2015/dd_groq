@@ -158,6 +158,56 @@ ${JSON.stringify(payload, null, 2)}`;
   return { commentary: result.commentary.trim() };
 }
 
+function sanitizeNarrativeMessage(text, fallback = '') {
+  if (typeof text !== 'string') return fallback;
+  let out = text.replace(/\s+/g, ' ').trim();
+  out = out.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+  if (out.length > 90) out = out.slice(0, 90).trim();
+  return out || fallback;
+}
+
+async function callGroqRareLore(payload) {
+  const originalMessage = typeof payload?.message === 'string' ? payload.message.trim() : '';
+  const fallback = { revisedMessage: originalMessage };
+
+  const prompt = `You are revising a single game message for a brutal retro ASCII roguelike called Dungeons Deep.
+
+Rewrite the message as a slightly more poetic, cryptic, atmospheric version.
+
+Rules:
+- Return ONLY valid JSON with exactly one field: revisedMessage
+- preserve the original gameplay meaning exactly
+- do not change mechanics, outcomes, items, quantities, or stakes
+- do not add advice
+- do not add labels
+- do not use quotation marks
+- keep it concise
+- maximum 1 sentence
+- maximum 90 characters
+- feel ancient, ominous, and elegant
+- do not invent events that did not occur
+- return only the revised message in the revisedMessage field
+
+Mode guidance:
+- watchful: the dungeon is aware, listening, leaning inward
+- ancient: old stone, buried memory, forgotten ages
+- deep_stone: vast depth, pressure, older powers below
+- blood_scent: weakness, injury, hunted feeling
+- dark_hunger: failing light, encroaching dark, patient dread
+
+Payload:
+${JSON.stringify(payload, null, 2)}`;
+
+  const result = await groqJson(
+    'Return only valid JSON with a single field named revisedMessage.',
+    prompt,
+    fallback
+  );
+
+  const revisedMessage = sanitizeNarrativeMessage(result && result.revisedMessage, originalMessage);
+  return { revisedMessage };
+}
+
 app.post("/api/director", async (req, res) => {
   const snapshot = req.body || {};
   console.log("Snapshot:", snapshot);
@@ -174,6 +224,14 @@ app.post("/api/message", async (req, res) => {
   console.log("Message payload:", payload.message || payload);
   const out = await callGroqMessage(payload);
   console.log("AI Message:", out);
+  res.json(out);
+});
+
+app.post("/api/rare-lore", async (req, res) => {
+  const payload = req.body || {};
+  console.log("Rare narrative payload:", payload.recentMessage || payload.message || payload);
+  const out = await callGroqRareLore(payload);
+  console.log("AI Rare Narrative:", out);
   res.json(out);
 });
 

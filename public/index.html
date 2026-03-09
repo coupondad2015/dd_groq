@@ -3707,11 +3707,14 @@ logMsg("");
 
   async function directorTest(depthOverride = null) {
     try{
-      const lvl = getLevel(depthOverride ?? game.depth);
+      const targetDepth = depthOverride ?? game.depth;
+      const lvl = (typeof getLevel === 'function') ? getLevel(targetDepth) : null;
       const prior = window.DD_DIRECTOR || {};
+      const potionList = (game && game.inv && Array.isArray(game.inv.potions)) ? game.inv.potions : [];
+      const healCount = potionList.filter(p => p === POTION.HEAL).length;
 
       const snapshot = {
-        depth: depthOverride ?? game.depth,
+        depth: targetDepth,
         hp: game.hp,
         hpMax: game.hpMax,
         hpPercent: game.hpMax > 0 ? game.hp / game.hpMax : 0,
@@ -3723,8 +3726,8 @@ logMsg("");
         torchLit: !!(game.torch && game.torch.lit),
         torchRadius: (game.torch && Number.isFinite(game.torch.radius)) ? game.torch.radius : 0,
 
-        healingPotions: game.inv.potions.filter(p => p === POTION.HEAL).length,
-        totalPotions: game.inv.potions.length,
+        healingPotions: healCount,
+        totalPotions: potionList.length,
         keys: game.inv.keys,
 
         weaponEquipped: !!game.weaponEquipped,
@@ -3750,6 +3753,7 @@ logMsg("");
       });
 
       const data = await res.json();
+      window.DD_LAST_DIRECTOR_SNAPSHOT = snapshot;
       window.DD_DIRECTOR = data || {};
       console.log("DIRECTOR SNAPSHOT:", snapshot);
       console.log("DIRECTOR RESPONSE:", data);
@@ -3759,8 +3763,8 @@ logMsg("");
       window.DD_DIRECTOR = {};
       return {};
     }
-  }  
-  
+  }
+
   function shouldAiCommentaryForMessage(text, type){
     const t = String(text || '').trim();
     if(!t) return false;

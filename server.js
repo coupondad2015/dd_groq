@@ -16,8 +16,7 @@ function fallbackDirector() {
     extraTorches: 0,
     traderBias: 1,
     monsterBias: 1,
-    microLevel: false,
-    intentDescription: "baseline pressure"
+    microLevel: false //added
   };
 }
 
@@ -63,7 +62,7 @@ BAD PRINCIPLES
 - Do not remove danger completely.
 - Relief should usually come with pressure, uncertainty, or cost.
 - Prefer difficult decisions over helping the player.
-- Shape tension and atmosphere, not guaranteed outcomes.
+- The dungeon should feel deliberate, not random.
 - The dungeon is not merciful.
 
 ALLOWED OUTPUT LEVERS
@@ -82,6 +81,52 @@ LEVER MEANINGS
 - monsterBias: controls overall floor danger pressure
 - microLevel: creates a smaller, denser floor with fewer rooms and tighter decisions
 
+FLOOR STYLES
+Choose exactly one floor style that best fits the snapshot:
+- predator
+- bait
+- falseMercy
+- darkness
+- pressure
+
+STYLE RULES
+- predator: when the player looks strong or buff-rich, raise monsterBias and offer little relief.
+- bait: when the player has gold or blood-gold, raise traderBias but keep danger present.
+- falseMercy: when the player is weak, give only a small relief signal and keep pressure alive.
+- darkness: when light is failing, favor extraTorches but do not make the floor safe.
+- pressure: a firm, uncompromising floor with above-normal monster pressure and little generosity.
+
+COMBAT FITNESS RULES
+Assess the player's fitness for combat from the snapshot.
+Strong indicators include:
+- hpPercent above 0.6
+- atk above baseline
+- totalPotions at 3 or more
+- invincibleSteps above 0
+- invisSteps above 0
+Weak indicators include:
+- hpPercent below 0.35
+- healingPotions at 0
+- poisonSteps above 0
+- torch starvation
+
+If the player looks strong or buff-rich:
+- prefer predator or pressure
+- prefer monsterBias between 1.12 and 1.2
+- avoid extraHealPotions
+- avoid forceStartShrine
+
+If the player looks weak:
+- do not automatically show mercy
+- prefer falseMercy over breather-style generosity
+- relief should be slight and memorable, never lavish
+
+SEQUENCING RULES
+- Avoid repeating the exact same floor style when the snapshot allows variety.
+- If priorIntent suggests the last floor was already intense, vary the next floor unless the player still looks too comfortable.
+- Use microLevel conservatively.
+- Avoid repeating microLevel on consecutive floors.
+
 YOU MUST NOT
 - invent new mechanics
 - invent new items
@@ -89,26 +134,6 @@ YOU MUST NOT
 - describe lore
 - explain your reasoning
 - add fields beyond the required JSON
-
-FLOOR INTENTS
-Choose exactly one intent that best fits the snapshot:
-- breather
-- falseRelief
-- predatory
-- merchantLure
-- compressedTemptation
-- scarcity
-
-DECISION HEURISTICS
-- Weak player does not automatically mean mercy.
-- If the player is weak but rich, merchantLure is often stronger than breather.
-- If the player has many potions or strong combat position, predatory is acceptable.
-- If light is failing, extraTorches can be meaningful.
-- forceStartShrine should be rare and should feel tempting, not generous.
-- microLevel should be used conservatively.
-- Avoid repeating microLevel on consecutive floors unless pressure should deliberately tighten.
-- Prefer varied pressure from floor to floor.
-- Relief should preserve danger.
 
 PLAYER SNAPSHOT
 ${JSON.stringify(snapshot, null, 2)}
@@ -120,7 +145,7 @@ HARD BOUNDS
 - traderBias: number from 1 to 3
 - monsterBias: number from 0.55 to 1.2
 - microLevel: boolean
-- intentDescription: short string, 2 to 8 words
+- intentDescription: short string, 2 to 8 words, naming the chosen floor style or posture
 
 RETURN ONLY VALID JSON WITH EXACTLY THESE FIELDS
 {

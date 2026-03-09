@@ -3707,16 +3707,44 @@ logMsg("");
 
   async function directorTest(depthOverride = null) {
     try{
-    const snapshot = {
-      depth: depthOverride ?? game.depth,
-      hp: game.hp,
-      hpMax: game.hpMax,
-      hpPercent: game.hpMax > 0 ? game.hp / game.hpMax : 0,
-      atk: game.atk,
-      gold: game.gold,
-      torches: game.inv.torches,
-      healingPotions: game.inv.potions.filter(p => p === POTION.HEAL).length
-    };
+      const targetDepth = depthOverride ?? game.depth;
+      const lvl = (typeof getLevel === 'function') ? getLevel(targetDepth) : null;
+      const prior = window.DD_DIRECTOR || {};
+      const potionList = (game && game.inv && Array.isArray(game.inv.potions)) ? game.inv.potions : [];
+      const healCount = potionList.filter(p => p === POTION.HEAL).length;
+
+      const snapshot = {
+        depth: targetDepth,
+        hp: game.hp,
+        hpMax: game.hpMax,
+        hpPercent: game.hpMax > 0 ? game.hp / game.hpMax : 0,
+        atk: game.atk,
+        gold: game.gold,
+        cgold: game.cgold || 0,
+
+        torches: game.inv.torches,
+        torchLit: !!(game.torch && game.torch.lit),
+        torchRadius: (game.torch && Number.isFinite(game.torch.radius)) ? game.torch.radius : 0,
+
+        healingPotions: healCount,
+        totalPotions: potionList.length,
+        keys: game.inv.keys,
+
+        weaponEquipped: !!game.weaponEquipped,
+        weaponName: game.weaponName || "",
+
+        poisonSteps: game.effects?.poison || 0,
+        invisSteps: game.effects?.invis || 0,
+        invincibleSteps: game.effects?.invincible || 0,
+
+        loreWeight: game.loreWeight || 0,
+        playerInCaves: !!(lvl && lvl.player && isInCaves(lvl.player.y)),
+
+        priorIntent: prior.intentDescription || "",
+        priorMicroLevel: !!prior.microLevel,
+        priorMonsterBias: Number.isFinite(prior.monsterBias) ? prior.monsterBias : 1,
+        priorTraderBias: Number.isFinite(prior.traderBias) ? prior.traderBias : 1
+      };
 
       const res = await fetch("/api/director", {
         method: "POST",
@@ -3725,7 +3753,9 @@ logMsg("");
       });
 
       const data = await res.json();
+      window.DD_LAST_DIRECTOR_SNAPSHOT = snapshot;
       window.DD_DIRECTOR = data || {};
+      console.log("DIRECTOR SNAPSHOT:", snapshot);
       console.log("DIRECTOR RESPONSE:", data);
       return data;
     }catch(err){

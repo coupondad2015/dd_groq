@@ -16,7 +16,8 @@ function fallbackDirector() {
     extraTorches: 0,
     traderBias: 1,
     monsterBias: 1,
-    microLevel: false //added
+    microLevel: false,
+    intentDescription: "baseline pressure"
   };
 }
 
@@ -51,81 +52,105 @@ async function groqJson(system, user, fallback) {
 }
 
 async function callGroqDirector(snapshot) {
-  const prompt = `You are the Dungeon Director for "Dungeons Deep", a hardcore ASCII roguelike guided by Burdened Agency Design (BAD).
-    
-    BAD principles:
-    - Choices are free but consequences persist.
-    - The system must remain honest.
-    - Do not remove danger completely.
-    - Relief should usually come with pressure, uncertainty, or cost.
-    - Prefer difficult decisions over helping the player.
-    - Shape tension and atmosphere, not guaranteed outcomes.
-    - The dungeon is not merciful.
+  const prompt = `
+ROLE
+You are the Dungeon Director for Dungeons Deep.
+You shape one dungeon floor using only existing game levers.
 
-    You may only influence the game using these existing levers:
-    - forceStartShrine
-    - extraHealPotions
-    - extraTorches
-    - traderBias
-    - monsterBias
-    - microLevel
+BAD PRINCIPLES
+- Choices are free but consequences persist.
+- The system must remain honest.
+- Do not remove danger completely.
+- Relief should usually come with pressure, uncertainty, or cost.
+- Prefer difficult decisions over helping the player.
+- Shape tension and atmosphere, not guaranteed outcomes.
+- The dungeon is not merciful.
 
-    Meaning of the levers:
-    - forceStartShrine: can create visible relief or temptation.
-    - extraHealPotions: slight survival relief.
-    - extraTorches: slight visibility and exploration relief.
-    - traderBias: increases the chance of a trade opportunity.
-    - monsterBias: controls overall floor danger pressure.
-    - microLevel: creates a smaller, denser floor with fewer rooms. This compresses monsters, traps, rewards, and decisions into tighter space, increasing pressure and making situations feel more deliberate.
+ALLOWED OUTPUT LEVERS
+- forceStartShrine
+- extraHealPotions
+- extraTorches
+- traderBias
+- monsterBias
+- microLevel
 
-    Do NOT invent new mechanics, rules, items, abilities, hidden behaviors, or outputs.
-    Only create situations by combining the existing levers.
+LEVER MEANINGS
+- forceStartShrine: visible relief or temptation at the start of the floor
+- extraHealPotions: slight survival relief
+- extraTorches: slight visibility relief
+- traderBias: increases the chance of a trade opportunity
+- monsterBias: controls overall floor danger pressure
+- microLevel: creates a smaller, denser floor with fewer rooms and tighter decisions
 
-    Player snapshot:
-    ${JSON.stringify(snapshot, null, 2)}
+YOU MUST NOT
+- invent new mechanics
+- invent new items
+- invent new outputs
+- describe lore
+- explain your reasoning
+- add fields beyond the required JSON
 
-    Choose a floor intent such as:
-    - breather
-    - falseRelief
-    - predatory
-    - merchantLure
-    - compressedTemptation
-    - scarcity
+FLOOR INTENTS
+Choose exactly one intent that best fits the snapshot:
+- breather
+- falseRelief
+- predatory
+- merchantLure
+- compressedTemptation
+- scarcity
 
-    Then express that intent only through the allowed levers.
+DECISION HEURISTICS
+- Weak player does not automatically mean mercy.
+- If the player is weak but rich, merchantLure is often stronger than breather.
+- If the player has many potions or strong combat position, predatory is acceptable.
+- If light is failing, extraTorches can be meaningful.
+- forceStartShrine should be rare and should feel tempting, not generous.
+- microLevel should be used conservatively.
+- Avoid repeating microLevel on consecutive floors unless pressure should deliberately tighten.
+- Prefer varied pressure from floor to floor.
+- Relief should preserve danger.
 
-    Guidelines:
-    - Prefer subtle adjustments.
-    - Relief should still preserve danger, uncertainty, or cost.
-    - Do not make the floor a gift.
-    - Use microLevel when a compressed, high-pressure situation would create meaningful decisions.
-    - Be conservative with microLevel; it should feel deliberate, not constant.
-    - Prefer varied pressure across a run when the current snapshot allows flexibility.
+PLAYER SNAPSHOT
+${JSON.stringify(snapshot, null, 2)}
 
-    Hard bounds:
-    - forceStartShrine must be true or false
-    - extraHealPotions must be an integer from 0 to 3
-    - extraTorches must be an integer from 0 to 3
-    - traderBias must be a number from 1 to 3
-    - monsterBias must be a number from 0.55 to 1.2
-    - microLevel must be true or false
+HARD BOUNDS
+- forceStartShrine: boolean
+- extraHealPotions: integer from 0 to 3
+- extraTorches: integer from 0 to 3
+- traderBias: number from 1 to 3
+- monsterBias: number from 0.55 to 1.2
+- microLevel: boolean
+- intentDescription: short string, 2 to 8 words
 
-    Return ONLY valid JSON with exactly these fields:
-    {
-      "forceStartShrine": boolean,
-      "extraHealPotions": 0,
-      "extraTorches": 0,
-      "traderBias": 1,
-      "monsterBias": 1,
-      "microLevel": false,
-      "intentDescription": "short explanation of the dungeon level's floor design"
-    }`;
-  
-  return await groqJson(
+RETURN ONLY VALID JSON WITH EXACTLY THESE FIELDS
+{
+  "forceStartShrine": false,
+  "extraHealPotions": 0,
+  "extraTorches": 0,
+  "traderBias": 1,
+  "monsterBias": 1,
+  "microLevel": false,
+  "intentDescription": "baseline pressure"
+}
+`;
+
+  const raw = await groqJson(
     "Return only valid JSON. No markdown. No prose.",
     prompt,
     fallbackDirector()
   );
+
+  return {
+    forceStartShrine: !!raw.forceStartShrine,
+    extraHealPotions: Math.max(0, Math.min(3, parseInt(raw.extraHealPotions, 10) || 0)),
+    extraTorches: Math.max(0, Math.min(3, parseInt(raw.extraTorches, 10) || 0)),
+    traderBias: Math.max(1, Math.min(3, Number(raw.traderBias) || 1)),
+    monsterBias: Math.max(0.55, Math.min(1.2, Number(raw.monsterBias) || 1)),
+    microLevel: !!raw.microLevel,
+    intentDescription: typeof raw.intentDescription === "string"
+      ? raw.intentDescription.trim().slice(0, 80)
+      : "baseline pressure"
+  };
 }
 
 async function callGroqMessage(payload) {

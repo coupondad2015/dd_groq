@@ -447,7 +447,7 @@ button:hover{ border-color:#3c5664; }
 .splash-reveal {
   position: absolute;
   inset: 0;
-  background-image: url("images/dd_logo.jpg");
+  background-image: url("../images/dd_logo.jpg");
   background-size: cover;
   background-position: center;
   image-rendering: auto;
